@@ -1,0 +1,382 @@
+Description: >
+  This template Deploy a High-Availability Web App using CloudFormation.
+  This stack has a VPC, Public & Private Subnets, launch cofiguration, 
+  loadbalancer, IAM roles & Policies.
+
+# The parameters used in this template
+Parameters:
+  ImageId: 
+    Description: The Image ID to be used by the Launch Configurations template 
+    Type: "AWS::EC2::Image::Id"
+    Default: ami-035966e8adab4aaad
+  VpcCidr:
+    Description: The Cidr block for your VPC
+    Type: String
+    Default: 10.0.0.0/16
+  PrivateSubnetACidr:
+    Description: The Cidr block for the Private Subnet A in your first AZ in your region
+    Type: String
+    Default: 10.0.1.0/24
+  PrivateSubnetBCidr:
+    Description: The Cidr block for the Private Subnet B in your first AZ in your region
+    Type: String
+    Default: 10.0.2.0/24
+  PrivateSubnetCCidr:
+    Description: The Cidr block for the Private Subnet C in your first AZ in your region
+    Type: String
+    Default: 10.0.3.0/24
+  PublicSubnetACidr:
+    Description: The Cidr block for the Public Subnet A in your first AZ in your region
+    Type: String
+    Default: 10.0.4.0/24
+  PublicSubnetBCidr:
+    Description: The Cidr block for the Public Subnet B in your first AZ in your region
+    Type: String
+    Default: 10.0.5.0/24
+  PublicSubnetCCidr:
+    Description: The Cidr block for the Public Subnet C in your first AZ in your region
+    Type: String
+    Default: 10.0.6.0/24
+
+
+Resources:
+
+  # My general VPC network configurations are contained here.
+  # Directly below here is the VPC
+  MyVPC:
+    Type: "AWS::EC2::VPC"
+    Properties: 
+      CidrBlock: !Ref VpcCidr
+  # Here we have the subnets for both the instances in the Private Subnets
+  # and the loadBalancer in the Public Subnets
+  PrivateSubnetRegionA: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "a"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PrivateSubnetACidr
+  PrivateSubnetRegionB: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "b"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PrivateSubnetBCidr
+  PrivateSubnetRegionC: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "c"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PrivateSubnetCCidr
+  PublicSubnetRegionA: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "a"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PublicSubnetACidr
+  PublicSubnetRegionB: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "b"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PublicSubnetBCidr
+  PublicSubnetRegionC: 
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 
+        !Join 
+          - ""
+          - - !Ref "AWS::Region"
+            - "c"
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref PublicSubnetCCidr
+
+  # The Internet gateway config for the Public Subnet can be seen directly below
+  MyVPCInternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: VPC-Internet-Gateway
+  MyInternetGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref MyVPCInternetGateway
+      VpcId: !Ref MyVPC
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref  MyVPC
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref PublicRouteTable
+      GatewayId: !Ref MyVPCInternetGateway
+      DestinationCidrBlock: 0.0.0.0/0
+  PublicSubnetOneRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetRegionA
+  PublicSubnetTwoRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetRegionB
+  PublicSubnetThreeRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetRegionC
+
+  # NAT Config for instances in the Private subnet can be perused below
+  # Directly below are the Elastic IP addresses that would be created
+  # in order for the NAT Gateway to work
+  NATGatewayOneElasticIP:
+    Type: "AWS::EC2::EIP"
+    DependsOn: MyInternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  NATGatewayTwoElasticIP:
+    Type: "AWS::EC2::EIP"
+    DependsOn: MyInternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  NATGatewayThreeElasticIP:
+    Type: "AWS::EC2::EIP"
+    DependsOn: MyInternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  # Create NAT Gateway
+  NATGatewayOne:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt NATGatewayOneElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetRegionA
+  NATGatewayTwo:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt NATGatewayTwoElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetRegionB
+  NATGatewayThree:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt NATGatewayThreeElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetRegionC
+  # Private RouteTable for the NAT
+  PrivateRouteTableOne:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref  MyVPC
+  PrivateRouteOne:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTableOne
+      NatGatewayId: !Ref NATGatewayOne
+      DestinationCidrBlock: 0.0.0.0/0
+  PrivateSubnetOneRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableOne
+      SubnetId: !Ref PrivateSubnetRegionA
+  PrivateRouteTableTwo:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref  MyVPC
+  PrivateRouteTwo:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTableTwo
+      NatGatewayId: !Ref NATGatewayTwo
+      DestinationCidrBlock: 0.0.0.0/0
+  PrivateSubnetTwoRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableTwo
+      SubnetId: !Ref PrivateSubnetRegionB
+  PrivateRouteTableThree:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref  MyVPC
+  PrivateRouteThree:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTableThree
+      NatGatewayId: !Ref NATGatewayThree
+      DestinationCidrBlock: 0.0.0.0/0
+  PrivateSubnetThreeRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableThree
+      SubnetId: !Ref PrivateSubnetRegionC
+
+  # The LoadBalancer for the this infrastructure
+  # You would also find the config for the listeners and taget group here
+  MyLoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties: 
+      IpAddressType: ipv4
+      Scheme: "internet-facing"
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
+      Subnets: # dynamically add this ones too
+        - !Ref PublicSubnetRegionA
+        - !Ref PublicSubnetRegionB
+        - !Ref PublicSubnetRegionC
+      Type: application
+  MyHTTPListener: 
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+  MyTargetGroup: 
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      HealthCheckPort: 80
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 15
+      HealthyThresholdCount: 8
+      Matcher: 
+        HttpCode: 200
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref MyVPC
+
+  # The IAM config for creating the UdacityS3ReadOnlyEC2 InstanceProfile
+  UdacityS3ReadOnlyEC2:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - 
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+  RolePolicies:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "root"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Action: 
+              - "s3:GetObject"
+              - "s3:ListBucket"
+            Resource: "*"
+      Roles:
+        - !Ref UdacityS3ReadOnlyEC2
+  ProfileWithRolesForOurApp:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles: 
+        - !Ref UdacityS3ReadOnlyEC2
+  
+  # Directly below here we have the launch configurations 
+  MyLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      LaunchConfigurationName: "Udagram-launch-config"
+      ImageId: !Ref ImageId
+      InstanceType: t3.medium
+      SecurityGroups: 
+        - !Ref InstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 10
+      UserData:
+        Fn::Base64: 
+          !Join
+            - "\n"
+            - - "#!/bin/bash"
+              - "sudo apt-get update -y"
+              - "sudo apt-get install unzip awscli -y"
+              - "sudo apt-get install apache2 -y"
+              - "sudo systemctl start apache2.service"
+              - "cd /var/www/html"
+              - "sudo aws s3 cp s3://udacity-demo-1/udacity.zip ."
+              - "unzip -o udacity.zip"
+      IamInstanceProfile:
+        Ref: "ProfileWithRolesForOurApp"
+  
+  # Directly below is the config for the Autoscaler group for the infrastructure
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: "Udagram-Autoscaler"
+      LaunchConfigurationName: !Ref MyLaunchConfig
+      MaxSize: "9"
+      MinSize: "3"
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs: 
+        - !Ref MyTargetGroup
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetRegionA
+        - !Ref PrivateSubnetRegionB
+        - !Ref PrivateSubnetRegionC
+  
+  # Directly below we have the security group configuration for the EC2 Instances
+  InstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MyVPC
+
+
+# Outputs 
+Outputs:
+  ExternalUrl:
+    Description: The url of the external load balancer
+    Value: !Join ['', ['http://', !GetAtt 'MyLoadBalancer.DNSName']]
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'ExternalUrl' ] ]
+
+
+      
+      
+
