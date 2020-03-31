@@ -1,0 +1,34 @@
+[
+    {
+        "ParameterKey":"ImageId",
+        "ParameterValue":"ami-035966e8adab4aaad"
+    },
+    {
+        "ParameterKey":"VpcCidr",
+        "ParameterValue":"10.0.0.0/16"
+    },
+    {
+        "ParameterKey":"PrivateSubnetACidr",
+        "ParameterValue":"10.0.1.0/24"
+    },
+    {
+        "ParameterKey":"PrivateSubnetBCidr",
+        "ParameterValue":"10.0.2.0/24"
+    },
+    {
+        "ParameterKey":"PrivateSubnetCCidr",
+        "ParameterValue":"10.0.3.0/24"
+    },
+    {
+        "ParameterKey":"PublicSubnetACidr",
+        "ParameterValue":"10.0.4.0/24"
+    },
+    {
+        "ParameterKey":"PublicSubnetBCidr",
+        "ParameterValue":"10.0.5.0/24"
+    },
+    {
+        "ParameterKey":"PublicSubnetCCidr",
+        "ParameterValue":"10.0.6.0/24"
+    }
+]
